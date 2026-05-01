@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuoteGen SaaS</title>
+
+<style>
+body {margin:0;font-family:Arial;background:#020617;color:#fff;}
+header {padding:15px;background:#0f172a;}
+.container {padding:20px;max-width:1000px;margin:auto;}
+
+textarea,input {
+  width:100%;
+  padding:10px;
+  margin:8px 0;
+  border:none;
+  border-radius:6px;
+}
+
+button {
+  padding:10px;
+  margin:5px;
+  border:none;
+  border-radius:6px;
+  background:#38bdf8;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.grid {display:flex;flex-wrap:wrap;}
+.card {margin:10px;background:#0f172a;padding:10px;border-radius:10px;}
+canvas {max-width:100%;border-radius:10px;}
+.small {font-size:12px;color:#94a3b8;}
+</style>
+</head>
+
+<body>
+
+<header>
+<h2>🔥 Quote Generator SaaS</h2>
+</header>
+
+<div class="container">
+
+<p class="small">Format: Quote : Author</p>
+
+<textarea id="input" rows="5" placeholder="Discipline creates freedom : Unknown"></textarea>
+
+<label>Quote Text Color</label>
+<input type="color" id="quoteColor" value="#ffffff">
+
+<label>Author Text Color</label>
+<input type="color" id="authorColor" value="#38bdf8">
+
+<label>Quote Background Color</label>
+<input type="color" id="bgTextColor" value="#000000">
+
+<label>Quote Background Opacity</label>
+<input type="range" id="bgOpacity" min="0" max="1" step="0.1" value="0.5">
+
+<label>Author Background Color</label>
+<input type="color" id="authorBgColor" value="#000000">
+
+<label>Author Background Opacity</label>
+<input type="range" id="authorBgOpacity" min="0" max="1" step="0.1" value="0.5">
+
+<label>Upload Background Image</label>
+<input type="file" id="bgUpload">
+
+<label>Upload Logo / Watermark</label>
+<input type="file" id="logoUpload">
+
+<button onclick="generate()">Generate Images</button>
+
+<div id="output" class="grid"></div>
+
+</div>
+
+<script>
+
+function wrap(ctx,text,x,y,maxWidth,lineHeight){
+  let words=text.split(" ");
+  let line="";
+  let lines=[];
+
+  for(let n=0;n<words.length;n++){
+    let test=line+words[n]+" ";
+    if(ctx.measureText(test).width>maxWidth){
+      lines.push(line);
+      line=words[n]+" ";
+    } else line=test;
+  }
+  lines.push(line);
+
+  lines.forEach((l,i)=>{
+    ctx.fillText(l,x,y+(i*lineHeight));
+  });
+
+  return lines.length;
+}
+
+function generate(){
+
+  const lines = document.getElementById("input").value.split("\n");
+
+  const quoteColor = document.getElementById("quoteColor").value;
+  const authorColor = document.getElementById("authorColor").value;
+
+  const bgTextColor = document.getElementById("bgTextColor").value;
+  const bgOpacity = document.getElementById("bgOpacity").value;
+
+  const authorBgColor = document.getElementById("authorBgColor").value;
+  const authorBgOpacity = document.getElementById("authorBgOpacity").value;
+
+  const bgFile = document.getElementById("bgUpload").files[0];
+  const logoFile = document.getElementById("logoUpload").files[0];
+
+  const output = document.getElementById("output");
+  output.innerHTML = "";
+
+  let bgReader = new FileReader();
+  let logoReader = new FileReader();
+
+  let bgData = null;
+  let logoData = null;
+
+  function start(){
+    process(lines, quoteColor, authorColor, bgTextColor, bgOpacity, authorBgColor, authorBgOpacity, bgData, logoData);
+  }
+
+  if(bgFile){
+    bgReader.onload = e => {
+      bgData = e.target.result;
+      if(logoFile){
+        logoReader.readAsDataURL(logoFile);
+      } else start();
+    };
+    bgReader.readAsDataURL(bgFile);
+  } else if(logoFile){
+    logoReader.readAsDataURL(logoFile);
+  } else start();
+
+  if(logoFile){
+    logoReader.onload = e => {
+      logoData = e.target.result;
+      start();
+    };
+  }
+}
+
+function process(lines, quoteColor, authorColor, bgTextColor, bgOpacity, authorBgColor, authorBgOpacity, bgImage, logo){
+
+  const pageUrl = window.location.href;
+
+  lines.forEach(line => {
+
+    if(!line.trim()) return;
+
+    let parts = line.split(":");
+    let quote = parts[0]?.trim();
+    let author = parts[1]?.trim() || "";
+
+    let canvas = document.createElement("canvas");
+    canvas.width = 800;
+    canvas.height = 800;
+    let ctx = canvas.getContext("2d");
+
+    function draw(){
+
+      if(bgImage){
+        let img = new Image();
+        img.src = bgImage;
+        img.onload = () => {
+          ctx.drawImage(img,0,0,800,800);
+          drawText();
+        }
+      } else {
+        ctx.fillStyle="#000";
+        ctx.fillRect(0,0,800,800);
+        drawText();
+      }
+    }
+
+    function drawText(){
+
+      ctx.textAlign="center";
+      ctx.font="bold 36px Arial";
+
+      let lineHeight = 40;
+      let linesCount = wrap(ctx, quote, 400, 300, 600, lineHeight);
+      let boxHeight = linesCount * lineHeight + 30;
+
+      // QUOTE BACKGROUND
+      ctx.globalAlpha = bgOpacity;
+      ctx.fillStyle = bgTextColor;
+      ctx.fillRect(100, 260, 600, boxHeight);
+      ctx.globalAlpha = 1;
+
+      // QUOTE TEXT
+      ctx.fillStyle = quoteColor;
+      wrap(ctx, quote, 400, 300, 600, lineHeight);
+
+      // AUTHOR
+      if(author){
+
+        ctx.font="22px Arial";
+
+        let textWidth = ctx.measureText("- " + author).width;
+        let padding = 20;
+
+        let boxX = 400 - (textWidth/2) - padding/2;
+        let boxY = 570;
+        let boxW = textWidth + padding;
+        let boxH = 40;
+
+        // AUTHOR BACKGROUND
+        ctx.globalAlpha = authorBgOpacity;
+        ctx.fillStyle = authorBgColor;
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+        ctx.globalAlpha = 1;
+
+        // AUTHOR TEXT
+        ctx.fillStyle = authorColor;
+        ctx.fillText("- " + author, 400, 600);
+      }
+
+      // LOGO / WATERMARK
+      if(logo){
+        let img = new Image();
+        img.src = logo;
+        img.onload = () => {
+          ctx.globalAlpha = 0.7;
+          ctx.drawImage(img, 600, 700, 150, 80);
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+
+    draw();
+
+    let div = document.createElement("div");
+    div.className="card";
+    div.appendChild(canvas);
+
+    // DOWNLOAD
+    let d = document.createElement("button");
+    d.innerText="Download";
+    d.onclick=()=>{
+      let a=document.createElement("a");
+      a.href=canvas.toDataURL();
+      a.download="quote.png";
+      a.click();
+    };
+
+    // SAVE TO SERVER
+    let save = document.createElement("button");
+    save.innerText="Save";
+    save.onclick=()=>{
+      fetch("save.php",{
+        method:"POST",
+        body: JSON.stringify({image: canvas.toDataURL()})
+      }).then(r=>r.text()).then(alert);
+    };
+
+    function share(name, url){
+      let b=document.createElement("button");
+      b.innerText=name;
+      b.onclick=()=>window.open(url,"_blank");
+      return b;
+    }
+
+    div.appendChild(d);
+    div.appendChild(save);
+    div.appendChild(share("Facebook",`https://www.facebook.com/sharer/sharer.php?u=${pageUrl}`));
+    div.appendChild(share("WhatsApp",`https://api.whatsapp.com/send?text=${pageUrl}`));
+    div.appendChild(share("Pinterest",`https://pinterest.com/pin/create/button/?url=${pageUrl}`));
+
+    output.appendChild(div);
+  });
+}
+
+</script>
+
+</body>
+</html>
